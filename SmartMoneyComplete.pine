@@ -1,0 +1,184 @@
+//@version=5
+indicator("Smart Money Concept [BOS, CHoCH, OB, FVG, Liquidity, Zones]", overlay=true)
+
+// ===== INPUT PARAMETERS =====
+swingLength = input.int(5, title="Swing Detection Length", minval=1)
+showBOS = input.bool(true, title="Show BOS")
+showCHoCH = input.bool(true, title="Show CHoCH")
+showOB = input.bool(true, title="Show Order Blocks")
+showFVG = input.bool(true, title="Show FVG")
+showLiquiditySweep = input.bool(true, title="Show Liquidity Sweeps")
+showBreakerBlocks = input.bool(true, title="Show Breaker Blocks")
+showMitigationBlocks = input.bool(true, title="Show Mitigation Blocks")
+showZones = input.bool(true, title="Show Market Zones")
+fontSize = input.string("small", title="Label Font Size", options=["tiny", "small", "normal", "large"])
+
+// ===== COLORS =====
+colorBOSUp = color.new(color.green, 70)
+colorBOSDown = color.new(color.red, 70)
+colorCHoCH = color.new(color.orange, 70)
+colorOBBull = color.new(color.lime, 80)
+colorOBBear = color.new(color.red, 80)
+colorFVG = color.new(color.blue, 80)
+colorLiqSweep = color.new(color.purple, 70)
+colorBreakerBlock = color.new(color.navy, 75)
+colorMitigationBlock = color.new(color.teal, 75)
+colorPremium = color.new(color.gray, 85)
+colorEquilibrium = color.new(color.gray, 85)
+colorDiscount = color.new(color.gray, 85)
+
+// ===== SWING DETECTION =====
+ph = ta.pivothigh(high, swingLength, swingLength)
+pl = ta.pivotlow(low, swingLength, swingLength)
+
+var float lastPH = na
+var float lastPL = na
+var float prevPH = na
+var float prevPL = na
+var int phBar = 0
+var int plBar = 0
+
+if not na(ph)
+    prevPH := lastPH
+    lastPH := ph
+    phBar := bar_index
+
+if not na(pl)
+    prevPL := lastPL
+    lastPL := pl
+    plBar := bar_index
+
+// ===== BREAK OF STRUCTURE (BOS) =====
+bosUp = not na(lastPH) and high > lastPH and bar_index != phBar
+bosDown = not na(lastPL) and low < lastPL and bar_index != plBar
+
+if showBOS
+    plotshape(bosUp, style=shape.triangleup, location=location.abovebar, color=colorBOSUp, size=size.small, title="BOS Up")
+    plotshape(bosDown, style=shape.triangledown, location=location.belowbar, color=colorBOSDown, size=size.small, title="BOS Down")
+    
+    if bosUp
+        label.new(bar_index, high, "BOS", style=label.style_label_down, color=color.new(color.green, 100), textcolor=color.black, size=fontSize)
+    if bosDown
+        label.new(bar_index, low, "BOS", style=label.style_label_up, color=color.new(color.red, 100), textcolor=color.black, size=fontSize)
+
+// ===== CHANGE OF CHARACTER (CHoCH) =====
+chochUp = bosUp and (low < lastPL or (not na(prevPL) and low < prevPL))
+chochDown = bosDown and (high > lastPH or (not na(prevPH) and high > prevPH))
+
+if showCHoCH
+    if chochUp
+        label.new(bar_index, high + (high * 0.005), "CHoCH", style=label.style_label_down, color=colorCHoCH, textcolor=color.black, size=fontSize)
+    if chochDown
+        label.new(bar_index, low - (low * 0.005), "CHoCH", style=label.style_label_up, color=colorCHoCH, textcolor=color.black, size=fontSize)
+
+// ===== ORDER BLOCKS (OB) =====
+bullishOB = close[1] < open[1] and close > open and high[1] > high
+bearishOB = close[1] > open[1] and close < open and low[1] < low
+
+if showOB
+    if bullishOB
+        box.new(bar_index - 1, low[1], bar_index, high[1], border_color=colorOBBull, bgcolor=colorOBBull, xloc=xloc.bar_index)
+        label.new(bar_index, high[1], "OB", style=label.style_label_down, color=color.new(color.lime, 100), textcolor=color.black, size=fontSize)
+    if bearishOB
+        box.new(bar_index - 1, low[1], bar_index, high[1], border_color=colorOBBear, bgcolor=colorOBBear, xloc=xloc.bar_index)
+        label.new(bar_index, low[1], "OB", style=label.style_label_up, color=color.new(color.red, 100), textcolor=color.black, size=fontSize)
+
+// ===== FAIR VALUE GAP (FVG) =====
+fvgUp = low[2] > high[1] and high[1] < high[0]
+fvgDown = high[2] < low[1] and low[1] > low[0]
+
+if showFVG
+    if fvgUp
+        fvgHigh = low[2]
+        fvgLow = high[1]
+        box.new(bar_index - 2, fvgLow, bar_index, fvgHigh, border_color=colorFVG, bgcolor=colorFVG, xloc=xloc.bar_index)
+        label.new(bar_index, (fvgHigh + fvgLow) / 2, "FVG", style=label.style_label_center, color=color.new(color.blue, 100), textcolor=color.black, size=fontSize)
+    
+    if fvgDown
+        fvgHigh = low[1]
+        fvgLow = high[2]
+        box.new(bar_index - 2, fvgLow, bar_index, fvgHigh, border_color=colorFVG, bgcolor=colorFVG, xloc=xloc.bar_index)
+        label.new(bar_index, (fvgHigh + fvgLow) / 2, "FVG", style=label.style_label_center, color=color.new(color.blue, 100), textcolor=color.black, size=fontSize)
+
+// ===== LIQUIDITY SWEEPS =====
+recentHighBar = ta.highestbars(high, swingLength)
+recentLowBar = ta.lowestbars(low, swingLength)
+
+liqSweepHigh = recentHighBar == 1 and close < close[1]
+liqSweepLow = recentLowBar == 1 and close > close[1]
+
+if showLiquiditySweep
+    if liqSweepHigh
+        label.new(bar_index, high, "LSWEEP", style=label.style_label_down, color=colorLiqSweep, textcolor=color.black, size=fontSize)
+    if liqSweepLow
+        label.new(bar_index, low, "LSWEEP", style=label.style_label_up, color=colorLiqSweep, textcolor=color.black, size=fontSize)
+
+// ===== BREAKER BLOCKS =====
+breakerBlockUp = high[1] > high and close < open and close[1] > open[1]
+breakerBlockDown = low[1] < low and close > open and close[1] < open[1]
+
+if showBreakerBlocks
+    if breakerBlockUp
+        box.new(bar_index - 1, low[1], bar_index, high[1], border_color=colorBreakerBlock, bgcolor=colorBreakerBlock, xloc=xloc.bar_index)
+        label.new(bar_index, high[1], "BB", style=label.style_label_down, color=color.new(color.navy, 100), textcolor=color.black, size=fontSize)
+    if breakerBlockDown
+        box.new(bar_index - 1, low[1], bar_index, high[1], border_color=colorBreakerBlock, bgcolor=colorBreakerBlock, xloc=xloc.bar_index)
+        label.new(bar_index, low[1], "BB", style=label.style_label_up, color=color.new(color.navy, 100), textcolor=color.black, size=fontSize)
+
+// ===== MITIGATION BLOCKS =====
+mitigationBlockUp = bullishOB and (low > prevPL or na(prevPL))
+mitigationBlockDown = bearishOB and (high < prevPH or na(prevPH))
+
+if showMitigationBlocks
+    if mitigationBlockUp
+        label.new(bar_index, low[1], "MB", style=label.style_label_up, color=color.new(color.teal, 100), textcolor=color.black, size=fontSize)
+    if mitigationBlockDown
+        label.new(bar_index, high[1], "MB", style=label.style_label_down, color=color.new(color.teal, 100), textcolor=color.black, size=fontSize)
+
+// ===== MARKET STRUCTURE ZONES =====
+if showZones
+    highestPrice = ta.highest(high, 100)
+    lowestPrice = ta.lowest(low, 100)
+    priceRange = highestPrice - lowestPrice
+    
+    premiumLevel = highestPrice - (priceRange * 0.25)
+    discountLevel = lowestPrice + (priceRange * 0.25)
+    equilibriumLevel = (highestPrice + lowestPrice) / 2
+    
+    // Premium Zone (Top 25%)
+    line.new(bar_index - 50, premiumLevel, bar_index, premiumLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
+    label.new(bar_index - 1, premiumLevel, "PREMIUM", style=label.style_label_right, color=colorPremium, textcolor=color.black, size=fontSize)
+    
+    // Equilibrium Zone (Middle)
+    line.new(bar_index - 50, equilibriumLevel, bar_index, equilibriumLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
+    label.new(bar_index - 1, equilibriumLevel, "EQUILIBRIUM", style=label.style_label_right, color=colorEquilibrium, textcolor=color.black, size=fontSize)
+    
+    // Discount Zone (Bottom 25%)
+    line.new(bar_index - 50, discountLevel, bar_index, discountLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
+    label.new(bar_index - 1, discountLevel, "DISCOUNT", style=label.style_label_right, color=colorDiscount, textcolor=color.black, size=fontSize)
+
+// ===== ALERTS =====
+alertinfo = ""
+if bosUp
+    alertinfo += "BOS UP | "
+if bosDown
+    alertinfo += "BOS DOWN | "
+if chochUp
+    alertinfo += "CHoCH UP | "
+if chochDown
+    alertinfo += "CHoCH DOWN | "
+if bullishOB
+    alertinfo += "BULLISH OB | "
+if bearishOB
+    alertinfo += "BEARISH OB | "
+if fvgUp
+    alertinfo += "FVG UP | "
+if fvgDown
+    alertinfo += "FVG DOWN | "
+if liqSweepHigh
+    alertinfo += "LIQUIDITY SWEEP HIGH | "
+if liqSweepLow
+    alertinfo += "LIQUIDITY SWEEP LOW | "
+
+if alertinfo != ""
+    alert(alertinfo)
