@@ -1,0 +1,521 @@
+//@version=6
+indicator(
+     "SMC All-In-One: BOS/CHoCH/OB/FVG/Liquidity/Zones",
+     overlay=true,
+     max_boxes_count=500,
+     max_labels_count=500,
+     max_lines_count=200)
+
+//====================================================
+// INPUTS
+//====================================================
+grpStruct = "Market Structure"
+swingLen = input.int(5, "Swing Detection Length", minval=1, group=grpStruct)
+showBOS = input.bool(true, "Show BOS / CHoCH Labels", group=grpStruct)
+
+grpOB = "Order Blocks"
+showOB = input.bool(true, "Show Order Blocks", group=grpOB)
+obLookback = input.int(15, "OB Search Lookback", minval=3, group=grpOB)
+obMaxCount = input.int(8, "Maximum OBs", minval=1, maxval=20, group=grpOB)
+obExtend = input.int(25, "OB Box Extension", minval=5, group=grpOB)
+
+grpFVG = "Fair Value Gaps"
+showFVG = input.bool(true, "Show FVG", group=grpFVG)
+fvgExtend = input.int(25, "FVG Box Extension", minval=5, group=grpFVG)
+fvgMaxCount = input.int(60, "Maximum FVGs", minval=1, maxval=200, group=grpFVG)
+
+grpLiq = "Liquidity Sweeps"
+showLiq = input.bool(true, "Show Liquidity Sweeps", group=grpLiq)
+
+grpZone = "Premium / Equilibrium / Discount"
+showZones = input.bool(true, "Show Zones", group=grpZone)
+eqBandPct = input.float(
+     5.0,
+     "Equilibrium Band Width (% of Range)",
+     minval=1.0,
+     maxval=20.0,
+     group=grpZone)
+
+//====================================================
+// COLORS
+//====================================================
+txtColor = color.black
+txtSize = size.tiny
+
+bullOBColor = color.new(color.teal, 85)
+bearOBColor = color.new(color.maroon, 85)
+breakerColor = color.new(color.orange, 80)
+mitigColor = color.new(color.gray, 90)
+
+bullFVGColor = color.new(color.blue, 85)
+bearFVGColor = color.new(color.purple, 85)
+
+premColor = color.new(color.red, 90)
+eqColor = color.new(color.gray, 90)
+discColor = color.new(color.green, 90)
+
+//====================================================
+// USER-DEFINED TYPE
+//====================================================
+type Zone
+    box zoneBox
+    float top
+    float bottom
+    bool bullish
+    string state
+    int leftBar
+
+var array<Zone> obZones = array.new<Zone>()
+var array<Zone> fvgZones = array.new<Zone>()
+
+//====================================================
+// PIVOTS
+//====================================================
+pivotHigh = ta.pivothigh(high, swingLen, swingLen)
+pivotLow = ta.pivotlow(low, swingLen, swingLen)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+var int lastSwingHighBar = na
+var int lastSwingLowBar = na
+
+var bool swingHighBroken = false
+var bool swingLowBroken = false
+var int trend = 0
+
+newSwing = false
+
+if not na(pivotHigh)
+    lastSwingHigh := pivotHigh
+    lastSwingHighBar := bar_index - swingLen
+    swingHighBroken := false
+    newSwing := true
+
+if not na(pivotLow)
+    lastSwingLow := pivotLow
+    lastSwingLowBar := bar_index - swingLen
+    swingLowBroken := false
+    newSwing := true
+
+//====================================================
+// HELPER FUNCTIONS
+//====================================================
+findBearishCandle() =>
+    int result = na
+    int searchLimit = math.min(obLookback, bar_index)
+
+    if searchLimit >= 1
+        for i = 1 to searchLimit
+            if na(result) and close[i] < open[i]
+                result := i
+
+    result
+
+findBullishCandle() =>
+    int result = na
+    int searchLimit = math.min(obLookback, bar_index)
+
+    if searchLimit >= 1
+        for i = 1 to searchLimit
+            if na(result) and close[i] > open[i]
+                result := i
+
+    result
+
+//====================================================
+// BOS / CHoCH
+//====================================================
+bullishBreak =
+     not na(lastSwingHigh) and
+     not swingHighBroken and
+     ta.crossover(close, lastSwingHigh)
+
+bearishBreak =
+     not na(lastSwingLow) and
+     not swingLowBroken and
+     ta.crossunder(close, lastSwingLow)
+
+//====================================================
+// BULLISH BREAK AND BULLISH OB
+//====================================================
+if bullishBreak
+    if showBOS
+        label.new(
+             bar_index,
+             high,
+             trend <= 0 ? "CHoCH" : "BOS",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize,
+             yloc=yloc.abovebar)
+
+    trend := 1
+    swingHighBroken := true
+
+    if showOB
+        offset = findBearishCandle()
+
+        if not na(offset)
+            obTop = high[offset]
+            obBottom = low[offset]
+
+            newBox = box.new(
+                 left=bar_index - offset,
+                 top=obTop,
+                 right=bar_index + obExtend,
+                 bottom=obBottom,
+                 border_color=color.teal,
+                 bgcolor=bullOBColor,
+                 xloc=xloc.bar_index)
+
+            array.push(
+                 obZones,
+                 Zone.new(
+                     newBox,
+                     obTop,
+                     obBottom,
+                     true,
+                     "active",
+                     bar_index - offset))
+
+//====================================================
+// BEARISH BREAK AND BEARISH OB
+//====================================================
+if bearishBreak
+    if showBOS
+        label.new(
+             bar_index,
+             low,
+             trend >= 0 ? "CHoCH" : "BOS",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize,
+             yloc=yloc.belowbar)
+
+    trend := -1
+    swingLowBroken := true
+
+    if showOB
+        offset = findBullishCandle()
+
+        if not na(offset)
+            obTop = high[offset]
+            obBottom = low[offset]
+
+            newBox = box.new(
+                 left=bar_index - offset,
+                 top=obTop,
+                 right=bar_index + obExtend,
+                 bottom=obBottom,
+                 border_color=color.maroon,
+                 bgcolor=bearOBColor,
+                 xloc=xloc.bar_index)
+
+            array.push(
+                 obZones,
+                 Zone.new(
+                     newBox,
+                     obTop,
+                     obBottom,
+                     false,
+                     "active",
+                     bar_index - offset))
+
+//====================================================
+// LIMIT TOTAL NUMBER OF ORDER BLOCKS
+//====================================================
+while array.size(obZones) > obMaxCount * 2
+    oldestOB = array.shift(obZones)
+    box.delete(oldestOB.zoneBox)
+
+//====================================================
+// ORDER-BLOCK MANAGEMENT
+//====================================================
+if array.size(obZones) > 0
+    for i = array.size(obZones) - 1 to 0
+        currentOB = array.get(obZones, i)
+
+        if currentOB.state == "active"
+            box.set_right(currentOB.zoneBox, bar_index)
+
+            if currentOB.bullish
+                breaksBullishOB = close < currentOB.bottom
+                touchesBullishOB =
+                     low <= currentOB.top and
+                     low >= currentOB.bottom
+
+                if breaksBullishOB
+                    currentOB.state := "breaker"
+                    box.set_bgcolor(currentOB.zoneBox, breakerColor)
+                    box.set_border_color(currentOB.zoneBox, color.orange)
+
+                    label.new(
+                         bar_index,
+                         currentOB.top,
+                         "Breaker",
+                         style=label.style_none,
+                         textcolor=txtColor,
+                         size=txtSize,
+                         yloc=yloc.abovebar)
+
+                    array.set(obZones, i, currentOB)
+
+                else if touchesBullishOB
+                    currentOB.state := "mitigated"
+                    box.set_bgcolor(currentOB.zoneBox, mitigColor)
+
+                    label.new(
+                         bar_index,
+                         currentOB.bottom,
+                         "Mitigated",
+                         style=label.style_none,
+                         textcolor=txtColor,
+                         size=txtSize,
+                         yloc=yloc.belowbar)
+
+                    array.set(obZones, i, currentOB)
+
+        else
+            box.set_right(
+                 currentOB.zoneBox,
+                 math.min(bar_index, currentOB.leftBar + obExtend))
+
+//====================================================
+// FAIR VALUE GAPS
+//====================================================
+bullishFVG =
+     showFVG and
+     bar_index >= 2 and
+     low > high[2]
+
+bearishFVG =
+     showFVG and
+     bar_index >= 2 and
+     high < low[2]
+
+if bullishFVG
+    fvgTop = low
+    fvgBottom = high[2]
+
+    newFVGBox = box.new(
+         left=bar_index - 2,
+         top=fvgTop,
+         right=bar_index + fvgExtend,
+         bottom=fvgBottom,
+         border_color=color.blue,
+         bgcolor=bullFVGColor,
+         xloc=xloc.bar_index)
+
+    array.push(
+         fvgZones,
+         Zone.new(
+             newFVGBox,
+             fvgTop,
+             fvgBottom,
+             true,
+             "active",
+             bar_index - 2))
+
+    label.new(
+         bar_index - 1,
+         math.avg(fvgTop, fvgBottom),
+         "FVG",
+         style=label.style_none,
+         textcolor=txtColor,
+         size=txtSize)
+
+if bearishFVG
+    fvgTop = low[2]
+    fvgBottom = high
+
+    newFVGBox = box.new(
+         left=bar_index - 2,
+         top=fvgTop,
+         right=bar_index + fvgExtend,
+         bottom=fvgBottom,
+         border_color=color.purple,
+         bgcolor=bearFVGColor,
+         xloc=xloc.bar_index)
+
+    array.push(
+         fvgZones,
+         Zone.new(
+             newFVGBox,
+             fvgTop,
+             fvgBottom,
+             false,
+             "active",
+             bar_index - 2))
+
+    label.new(
+         bar_index - 1,
+         math.avg(fvgTop, fvgBottom),
+         "FVG",
+         style=label.style_none,
+         textcolor=txtColor,
+         size=txtSize)
+
+// Limit FVG array size
+while array.size(fvgZones) > fvgMaxCount
+    oldestFVG = array.shift(fvgZones)
+    box.delete(oldestFVG.zoneBox)
+
+//====================================================
+// FVG MANAGEMENT
+//====================================================
+if array.size(fvgZones) > 0
+    for i = array.size(fvgZones) - 1 to 0
+        currentFVG = array.get(fvgZones, i)
+
+        if currentFVG.state == "active"
+            box.set_right(currentFVG.zoneBox, bar_index)
+
+            filled =
+                 low <= currentFVG.top and
+                 high >= currentFVG.bottom
+
+            if filled
+                currentFVG.state := "filled"
+                box.set_bgcolor(
+                     currentFVG.zoneBox,
+                     color.new(color.gray, 95))
+                box.set_border_color(
+                     currentFVG.zoneBox,
+                     color.gray)
+
+                array.set(fvgZones, i, currentFVG)
+
+//====================================================
+// LIQUIDITY SWEEPS
+//====================================================
+if showLiq
+    bearishSweep =
+         not na(lastSwingHigh) and
+         high > lastSwingHigh and
+         close < lastSwingHigh
+
+    bullishSweep =
+         not na(lastSwingLow) and
+         low < lastSwingLow and
+         close > lastSwingLow
+
+    if bearishSweep
+        label.new(
+             bar_index,
+             high,
+             "Liquidity Sweep",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize,
+             yloc=yloc.abovebar)
+
+    if bullishSweep
+        label.new(
+             bar_index,
+             low,
+             "Liquidity Sweep",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize,
+             yloc=yloc.belowbar)
+
+//====================================================
+// PREMIUM / EQUILIBRIUM / DISCOUNT ZONES
+//====================================================
+var box premiumBox = na
+var box equilibriumBox = na
+var box discountBox = na
+
+validRange =
+     showZones and
+     not na(lastSwingHigh) and
+     not na(lastSwingLow) and
+     not na(lastSwingHighBar) and
+     not na(lastSwingLowBar) and
+     lastSwingHigh > lastSwingLow
+
+if validRange
+    dealingRange = lastSwingHigh - lastSwingLow
+
+    equilibriumTop =
+         lastSwingLow +
+         (0.5 + eqBandPct / 200.0) * dealingRange
+
+    equilibriumBottom =
+         lastSwingLow +
+         (0.5 - eqBandPct / 200.0) * dealingRange
+
+    rangeLeft = math.min(lastSwingHighBar, lastSwingLowBar)
+
+    if newSwing or na(premiumBox)
+        if not na(premiumBox)
+            box.delete(premiumBox)
+            box.delete(equilibriumBox)
+            box.delete(discountBox)
+
+        premiumBox := box.new(
+             left=rangeLeft,
+             top=lastSwingHigh,
+             right=bar_index,
+             bottom=equilibriumTop,
+             border_color=na,
+             bgcolor=premColor,
+             xloc=xloc.bar_index)
+
+        equilibriumBox := box.new(
+             left=rangeLeft,
+             top=equilibriumTop,
+             right=bar_index,
+             bottom=equilibriumBottom,
+             border_color=na,
+             bgcolor=eqColor,
+             xloc=xloc.bar_index)
+
+        discountBox := box.new(
+             left=rangeLeft,
+             top=equilibriumBottom,
+             right=bar_index,
+             bottom=lastSwingLow,
+             border_color=na,
+             bgcolor=discColor,
+             xloc=xloc.bar_index)
+
+        label.new(
+             bar_index,
+             lastSwingHigh,
+             "Premium",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize)
+
+        label.new(
+             bar_index,
+             math.avg(equilibriumTop, equilibriumBottom),
+             "Equilibrium",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize)
+
+        label.new(
+             bar_index,
+             lastSwingLow,
+             "Discount",
+             style=label.style_none,
+             textcolor=txtColor,
+             size=txtSize)
+
+    else
+        box.set_right(premiumBox, bar_index)
+        box.set_right(equilibriumBox, bar_index)
+        box.set_right(discountBox, bar_index)
+
+// Delete zone boxes when disabled
+if not showZones
+    if not na(premiumBox)
+        box.delete(premiumBox)
+        box.delete(equilibriumBox)
+        box.delete(discountBox)
+
+        premiumBox := na
+        equilibriumBox := na
+        discountBox := na
