@@ -1,4 +1,4 @@
-//@version=5
+//@version=6
 indicator("Smart Money Concept [BOS, CHoCH, OB, FVG, Liquidity, Zones]", overlay=true)
 
 // ===== INPUT PARAMETERS =====
@@ -53,9 +53,6 @@ bosUp = not na(lastPH) and high > lastPH and bar_index != phBar
 bosDown = not na(lastPL) and low < lastPL and bar_index != plBar
 
 if showBOS
-    plotshape(bosUp, style=shape.triangleup, location=location.abovebar, color=colorBOSUp, size=size.small, title="BOS Up")
-    plotshape(bosDown, style=shape.triangledown, location=location.belowbar, color=colorBOSDown, size=size.small, title="BOS Down")
-    
     if bosUp
         label.new(bar_index, high, "BOS", style=label.style_label_down, color=color.new(color.green, 100), textcolor=color.black, size=fontSize)
     if bosDown
@@ -67,9 +64,9 @@ chochDown = bosDown and (high > lastPH or (not na(prevPH) and high > prevPH))
 
 if showCHoCH
     if chochUp
-        label.new(bar_index, high + (high * 0.005), "CHoCH", style=label.style_label_down, color=colorCHoCH, textcolor=color.black, size=fontSize)
+        label.new(bar_index, high + (high * 0.005), "CHoCH", style=label.style_label_down, color=color.new(color.orange, 100), textcolor=color.black, size=fontSize)
     if chochDown
-        label.new(bar_index, low - (low * 0.005), "CHoCH", style=label.style_label_up, color=colorCHoCH, textcolor=color.black, size=fontSize)
+        label.new(bar_index, low - (low * 0.005), "CHoCH", style=label.style_label_up, color=color.new(color.orange, 100), textcolor=color.black, size=fontSize)
 
 // ===== ORDER BLOCKS (OB) =====
 bullishOB = close[1] < open[1] and close > open and high[1] > high
@@ -109,9 +106,9 @@ liqSweepLow = recentLowBar == 1 and close > close[1]
 
 if showLiquiditySweep
     if liqSweepHigh
-        label.new(bar_index, high, "LSWEEP", style=label.style_label_down, color=colorLiqSweep, textcolor=color.black, size=fontSize)
+        label.new(bar_index, high, "LSWEEP", style=label.style_label_down, color=color.new(color.purple, 100), textcolor=color.black, size=fontSize)
     if liqSweepLow
-        label.new(bar_index, low, "LSWEEP", style=label.style_label_up, color=colorLiqSweep, textcolor=color.black, size=fontSize)
+        label.new(bar_index, low, "LSWEEP", style=label.style_label_up, color=color.new(color.purple, 100), textcolor=color.black, size=fontSize)
 
 // ===== BREAKER BLOCKS =====
 breakerBlockUp = high[1] > high and close < open and close[1] > open[1]
@@ -147,38 +144,46 @@ if showZones
     
     // Premium Zone (Top 25%)
     line.new(bar_index - 50, premiumLevel, bar_index, premiumLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
-    label.new(bar_index - 1, premiumLevel, "PREMIUM", style=label.style_label_right, color=colorPremium, textcolor=color.black, size=fontSize)
+    label.new(bar_index - 1, premiumLevel, "PREMIUM", style=label.style_label_right, color=color.new(color.gray, 100), textcolor=color.black, size=fontSize)
     
     // Equilibrium Zone (Middle)
     line.new(bar_index - 50, equilibriumLevel, bar_index, equilibriumLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
-    label.new(bar_index - 1, equilibriumLevel, "EQUILIBRIUM", style=label.style_label_right, color=colorEquilibrium, textcolor=color.black, size=fontSize)
+    label.new(bar_index - 1, equilibriumLevel, "EQUILIBRIUM", style=label.style_label_right, color=color.new(color.gray, 100), textcolor=color.black, size=fontSize)
     
     // Discount Zone (Bottom 25%)
     line.new(bar_index - 50, discountLevel, bar_index, discountLevel, color=color.new(color.gray, 60), style=line.style_dashed, width=1)
-    label.new(bar_index - 1, discountLevel, "DISCOUNT", style=label.style_label_right, color=colorDiscount, textcolor=color.black, size=fontSize)
+    label.new(bar_index - 1, discountLevel, "DISCOUNT", style=label.style_label_right, color=color.new(color.gray, 100), textcolor=color.black, size=fontSize)
 
 // ===== ALERTS =====
-alertinfo = ""
-if bosUp
-    alertinfo += "BOS UP | "
-if bosDown
-    alertinfo += "BOS DOWN | "
-if chochUp
-    alertinfo += "CHoCH UP | "
-if chochDown
-    alertinfo += "CHoCH DOWN | "
-if bullishOB
-    alertinfo += "BULLISH OB | "
-if bearishOB
-    alertinfo += "BEARISH OB | "
-if fvgUp
-    alertinfo += "FVG UP | "
-if fvgDown
-    alertinfo += "FVG DOWN | "
-if liqSweepHigh
-    alertinfo += "LIQUIDITY SWEEP HIGH | "
-if liqSweepLow
-    alertinfo += "LIQUIDITY SWEEP LOW | "
+var string alertinfo = ""
 
-if alertinfo != ""
+if bosUp
+    alertinfo := "BOS UP"
+    alert(alertinfo)
+if bosDown
+    alertinfo := "BOS DOWN"
+    alert(alertinfo)
+if chochUp
+    alertinfo := "CHoCH UP"
+    alert(alertinfo)
+if chochDown
+    alertinfo := "CHoCH DOWN"
+    alert(alertinfo)
+if bullishOB
+    alertinfo := "BULLISH OB"
+    alert(alertinfo)
+if bearishOB
+    alertinfo := "BEARISH OB"
+    alert(alertinfo)
+if fvgUp
+    alertinfo := "FVG UP"
+    alert(alertinfo)
+if fvgDown
+    alertinfo := "FVG DOWN"
+    alert(alertinfo)
+if liqSweepHigh
+    alertinfo := "LIQUIDITY SWEEP HIGH"
+    alert(alertinfo)
+if liqSweepLow
+    alertinfo := "LIQUIDITY SWEEP LOW"
     alert(alertinfo)
