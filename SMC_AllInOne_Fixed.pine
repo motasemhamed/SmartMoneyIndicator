@@ -36,11 +36,13 @@ eqBandPct = input.float(
      maxval=20.0,
      group=grpZone)
 
+grpFont = "Font Settings"
+txtSize = input.string("large", "Label Font Size", options=["tiny", "small", "normal", "large"], group=grpFont)
+
 //====================================================
 // COLORS
 //====================================================
 txtColor = color.black
-txtSize = size.tiny
 
 bullOBColor = color.new(color.teal, 85)
 bearOBColor = color.new(color.maroon, 85)
